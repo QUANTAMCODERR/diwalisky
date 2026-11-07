@@ -1,203 +1,486 @@
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 
-type ExplosionStyle = "sphere" | "ring" | "double";
+type ExplosionStyle =
+  | "peony"
+  | "chrysanthemum"
+  | "willow"
+  | "ring"
+  | "palm"
+  | "brocade";
 
 interface Particle {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  alpha: number;
+  life: number;
+  maxLife: number;
   hue: number;
   size: number;
+  gravity: number;
+  drag: number;
+  trail: { x: number; y: number }[];
+  style: ExplosionStyle;
+  secondaryBurst: boolean;
 }
 
 interface Rocket {
   x: number;
   y: number;
   targetY: number;
+  vx: number;
   speed: number;
   hue: number;
+  trail: { x: number; y: number }[];
   style: ExplosionStyle;
+  doubleBlast: boolean;
+}
+
+interface BlastGlow {
+  x: number;
+  y: number;
+  hue: number;
+  life: number;
+  maxLife: number;
 }
 
 export default function FireworksCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const [autoMode, setAutoMode] = useState(false);
+  const [finaleMode, setFinaleMode] = useState(false);
+
+  const autoRef = useRef(false);
+  const finaleRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = canvas?.getContext("2d", {
+      alpha: true,
+      desynchronized: true,
+    });
 
     if (!canvas || !ctx) return;
 
     let particles: Particle[] = [];
     let rockets: Rocket[] = [];
-    let animationId: number;
-    let lastAutoLaunch = 0;
+    let blastGlows: BlastGlow[] = [];
+    let animationId = 0;
+    let autoStep = 0;
+    let nextAutoTime = 0;
 
-    const resizeCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
+    const autoPattern = [3, 2, 3, 2, 3, 1];
+    let lastFinale = 0;
+    let previousTime = 0;
+
+    const styles: ExplosionStyle[] = [
+      "peony",
+      "chrysanthemum",
+      "willow",
+      "ring",
+      "palm",
+      "brocade",
+    ];
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1);
 
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
     };
 
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
+    resize();
+    window.addEventListener("resize", resize);
 
-    // Create explosion with different styles
-    const createFireworks = (
-      x: number,
-      y: number,
-      hue: number,
-      style: ExplosionStyle
-    ) => {
-      const count = 100;
+    const createSecondaryBurst = (x: number, y: number, hue: number) => {
+      const count = 22;
 
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count;
-
-        let speed: number;
-
-        if (style === "ring") {
-          speed = 4;
-        } else if (style === "double") {
-          speed = i % 2 === 0 ? 5 : 2.5;
-        } else {
-          speed = Math.random() * 5 + 1;
-        }
+        const speed = 1.2 + Math.random() * 1.5;
+        const life = 35 + Math.random() * 20;
 
         particles.push({
           x,
           y,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
-          alpha: 1,
-          hue,
-          size: Math.random() * 2 + 1,
+          life,
+          maxLife: life,
+          hue: hue + (Math.random() - 0.5) * 35,
+          size: Math.random() * 1.2 + 0.8,
+          gravity: 0.035,
+          drag: 0.985,
+          trail: [],
+          style: "peony",
+          secondaryBurst: false,
         });
       }
     };
 
-    // Create rocket
-    const launchRocket = (
+    // Different explosion patterns
+    const explode = (
       x: number,
-      targetY: number
+      y: number,
+      hue: number,
+      style: ExplosionStyle,
+      doubleBlast: boolean = false,
     ) => {
-      const styles: ExplosionStyle[] = [
-        "sphere",
-        "ring",
-        "double",
-      ];
+      const count =
+        style === "chrysanthemum"
+          ? 140
+          : style === "palm"
+            ? 120
+            : style === "willow"
+              ? 120
+              : style === "brocade"
+                ? 130
+                : 110;
+
+      // Remove older particles when particle limit is reached
+      if (particles.length > 900) {
+        particles = particles.slice(-500);
+      }
+
+      blastGlows.push({
+        x,
+        y,
+        hue,
+        life: 55,
+        maxLife: 55,
+      });
+
+      for (let i = 0; i < count; i++) {
+        const branchCount = 7;
+
+        // Different angles for different fireworks
+        let angle = (Math.PI * 2 * i) / count;
+
+        if (style === "peony") {
+          angle += (Math.random() - 0.5) * 0.12;
+        }
+
+        if (style === "chrysanthemum") {
+          angle += (Math.random() - 0.5) * 0.035;
+        }
+
+        if (style === "ring") {
+          angle += (Math.random() - 0.5) * 0.015;
+        }
+
+        if (style === "palm") {
+          const branchAngle = (Math.PI * 2 * (i % branchCount)) / branchCount;
+          angle = branchAngle + (Math.random() - 0.5) * 0.35;
+        }
+
+        if (style === "willow" || style === "brocade") {
+          angle += (Math.random() - 0.5) * 0.18;
+        }
+
+        // Smaller and smoother explosion radius
+        let speed = 1.7 + Math.random() * 0.8;
+
+        if (style === "ring") {
+          speed = 2.0 + Math.random() * 0.3;
+        }
+
+        if (style === "palm") {
+          speed = 2.0 + Math.random() * 0.4;
+        }
+
+        if (style === "willow") {
+          speed = 1.4 + Math.random() * 0.7;
+        }
+
+        if (style === "brocade") {
+          speed = 1.6 + Math.random() * 0.7;
+        }
+
+        const life =
+          style === "willow" || style === "brocade"
+            ? 145 + Math.random() * 35
+            : 100 + Math.random() * 25;
+
+        const particleHue =
+          style === "willow" || style === "brocade"
+            ? 42 + Math.random() * 15
+            : hue + (Math.random() - 0.5) * 35;
+
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life,
+          maxLife: life,
+          hue: particleHue,
+          size: Math.random() * 1.4 + 1,
+          gravity:
+            style === "willow" ? 0.065 : style === "brocade" ? 0.045 : 0.025,
+          drag: style === "willow" ? 0.99 : 0.993,
+          trail: [],
+          style,
+          secondaryBurst: doubleBlast && i % 10 === 0,
+        });
+      }
+    };
+
+    // Launch rocket
+    let rocketLaunchCount = 0;
+
+    // Launch rocket
+    const launchRocket = (x: number, targetY: number) => {
+      if (rockets.length >= 12) return;
+
+      rocketLaunchCount++;
 
       rockets.push({
         x,
         y: window.innerHeight,
-        targetY,
-        speed: Math.random() * 3 + 6,
+        targetY: Math.max(60, targetY),
+        vx: (Math.random() - 0.5) * 0.6,
+        speed: 6 + Math.random() * 1.5,
         hue: Math.random() * 360,
+        trail: [],
         style: styles[Math.floor(Math.random() * styles.length)],
+
+        // Every third rocket gets a double blast
+        doubleBlast: rocketLaunchCount % 3 === 0,
       });
     };
 
-    // Manual launch
-    const handleClick = (event: MouseEvent) => {
+    const handlePointer = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+
+      if ((event.target as HTMLElement).closest("button")) return;
+
       launchRocket(event.clientX, event.clientY);
     };
 
-    window.addEventListener("click", handleClick);
+    window.addEventListener("pointerdown", handlePointer);
 
+    // Animation loop
     const animate = (time: number) => {
-      ctx.clearRect(
-        0,
-        0,
-        window.innerWidth,
-        window.innerHeight
-      );
+      const dt = Math.min((time - (previousTime || time)) / 16.67, 1.5);
 
-      // Automatic fireworks
-      if (autoMode && time - lastAutoLaunch > 900) {
-        const x = Math.random() * window.innerWidth;
-        const targetY = Math.random() * window.innerHeight * 0.55 + 50;
+      previousTime = time;
 
-        launchRocket(x, targetY);
-        lastAutoLaunch = time;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.globalCompositeOperation = "lighter";
+      // Visible soft circular explosion glow
+      blastGlows = blastGlows.filter((glow) => glow.life > 0);
+
+      blastGlows.forEach((glow) => {
+        const progress = glow.life / glow.maxLife;
+
+        // Expanding circular halo
+        const radius = 85 * (1.2 - progress * 0.2);
+
+        const gradient = ctx.createRadialGradient(
+          glow.x,
+          glow.y,
+          0,
+          glow.x,
+          glow.y,
+          radius,
+        );
+
+        gradient.addColorStop(
+          0,
+          `hsla(${glow.hue}, 100%, 90%, ${progress * 0.32})`,
+        );
+
+        gradient.addColorStop(
+          0.25,
+          `hsla(${glow.hue}, 100%, 75%, ${progress * 0.24})`,
+        );
+
+        gradient.addColorStop(
+          0.6,
+          `hsla(${glow.hue}, 100%, 60%, ${progress * 0.1})`,
+        );
+
+        gradient.addColorStop(1, "transparent");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(glow.x, glow.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        glow.life -= dt;
+      });
+
+      // Automatic fireworks sequence
+      if (autoRef.current) {
+        if (nextAutoTime === 0) {
+          nextAutoTime = time;
+        }
+
+        if (time >= nextAutoTime) {
+          const rocketCount = autoPattern[autoStep];
+
+          // Launch 3 rockets from different locations
+          if (rocketCount === 3) {
+            const positions =
+              autoStep === 0
+                ? [width * 0.15, width * 0.5, width * 0.85]
+                : [width * 0.25, width * 0.65, width * 0.95];
+
+            positions.forEach((x) => {
+              launchRocket(x, 80 + Math.random() * height * 0.45);
+            });
+          } else {
+            // Launch one rocket
+            launchRocket(
+              70 + Math.random() * (width - 140),
+              80 + Math.random() * height * 0.45,
+            );
+          }
+
+          // Move to next pattern
+          autoStep = (autoStep + 1) % autoPattern.length;
+
+          // Timing between launches
+          nextAutoTime = time + (rocketCount === 2 ? 1200 : 600);
+        }
       }
 
-      // Rocket animation
+      // Grand Finale
+      if (finaleRef.current && time - lastFinale > 650) {
+        launchRocket(
+          50 + Math.random() * (width - 100),
+          70 + Math.random() * height * 0.48,
+        );
+
+        lastFinale = time;
+      }
+
+      // Rocket trails and animation
       rockets = rockets.filter((rocket) => {
-        rocket.y -= rocket.speed;
+        rocket.trail.unshift({
+          x: rocket.x,
+          y: rocket.y,
+        });
 
+        if (rocket.trail.length > 6) {
+          rocket.trail.pop();
+        }
+
+        // Draw smooth glowing rocket trail
+        for (let i = 1; i < rocket.trail.length; i++) {
+          const current = rocket.trail[i];
+          const previous = rocket.trail[i - 1];
+
+          const alpha = 1 - i / rocket.trail.length;
+
+          ctx.beginPath();
+          ctx.moveTo(previous.x, previous.y);
+          ctx.lineTo(current.x, current.y);
+
+          ctx.strokeStyle = `hsla(${rocket.hue},100%,75%,${alpha})`;
+          ctx.lineWidth = 4 * alpha + 0.5;
+          ctx.shadowBlur = 2;
+          ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
+          ctx.stroke();
+        }
+
+        rocket.x += rocket.vx * dt;
+        rocket.y -= rocket.speed * dt;
+
+        // Bright rocket head
         ctx.beginPath();
-        ctx.moveTo(rocket.x, rocket.y + 20);
-        ctx.lineTo(rocket.x, rocket.y);
-
-        ctx.strokeStyle = `hsl(${rocket.hue}, 100%, 70%)`;
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = `hsl(${rocket.hue}, 100%, 60%)`;
-        ctx.stroke();
+        ctx.arc(rocket.x, rocket.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
+        ctx.fill();
 
         if (rocket.y <= rocket.targetY) {
-          createFireworks(
+          explode(
             rocket.x,
             rocket.y,
             rocket.hue,
-            rocket.style
+            rocket.style,
+            rocket.doubleBlast,
           );
-
           return false;
         }
 
         return true;
       });
 
-      // Particle animation
-      particles = particles.filter(
-        (particle) => particle.alpha > 0.02
-      );
+      // Particle physics and trails
+      particles = particles.filter((p) => p.life > 0);
 
-      particles.forEach((particle) => {
-        particle.x += particle.vx;
-        particle.y += particle.vy;
+      particles.forEach((p, index) => {
+        p.trail.unshift({ x: p.x, y: p.y });
 
-        particle.vy += 0.045;
+        if (p.trail.length > 3) {
+          p.trail.pop();
+        }
 
-        particle.vx *= 0.99;
-        particle.vy *= 0.99;
+        // Smooth particle movement
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
 
-        particle.alpha -= 0.012;
+        p.vy += p.gravity * dt;
 
+        p.vx *= Math.pow(p.drag, dt);
+        p.vy *= Math.pow(p.drag, dt);
+
+        p.life -= dt;
+        // Trigger secondary mini explosion
+        if (p.secondaryBurst && p.life < p.maxLife * 0.55) {
+          p.secondaryBurst = false;
+
+          createSecondaryBurst(p.x, p.y, p.hue);
+        }
+
+        const progress = Math.max(0, p.life / p.maxLife);
+        const fade = Math.pow(progress, 0.8);
+
+        // Draw particle tail
+        for (let i = 1; i < p.trail.length; i++) {
+          const current = p.trail[i];
+          const previous = p.trail[i - 1];
+
+          const trailAlpha = fade * (1 - i / p.trail.length);
+
+          ctx.beginPath();
+          ctx.moveTo(previous.x, previous.y);
+          ctx.lineTo(current.x, current.y);
+
+          ctx.strokeStyle = `hsla(${p.hue},100%,75%,${trailAlpha})`;
+          ctx.lineWidth = p.size * trailAlpha + 0.5;
+
+          ctx.shadowBlur = 0;
+          ctx.stroke();
+        }
+
+        // Glowing particle head
+        // Optimized glowing particle head
         ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.2, p.size * fade), 0, Math.PI * 2);
 
-        ctx.arc(
-          particle.x,
-          particle.y,
-          particle.size,
-          0,
-          Math.PI * 2
-        );
+        ctx.fillStyle = `hsla(${p.hue},100%,90%,${fade})`;
 
-        ctx.fillStyle = `hsla(
-          ${particle.hue},
-          100%,
-          60%,
-          ${particle.alpha}
-        )`;
-
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = `hsl(${particle.hue}, 100%, 60%)`;
+        // Glow only on selected particles for better performance
+        ctx.shadowBlur = index % 5 === 0 ? 3 * fade : 0;
+        ctx.shadowColor = `hsl(${p.hue},100%,65%)`;
 
         ctx.fill();
       });
 
       ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = "source-over";
 
       animationId = requestAnimationFrame(animate);
     };
@@ -206,10 +489,35 @@ export default function FireworksCanvas() {
 
     return () => {
       cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resizeCanvas);
-      window.removeEventListener("click", handleClick);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("pointerdown", handlePointer);
     };
-  }, [autoMode]);
+  }, []);
+
+  // Keep the two modes mutually exclusive
+  const toggleAuto = () => {
+    const next = !autoMode;
+
+    autoRef.current = next;
+    setAutoMode(next);
+
+    if (next) {
+      finaleRef.current = false;
+      setFinaleMode(false);
+    }
+  };
+
+  const toggleFinale = () => {
+    const next = !finaleMode;
+
+    finaleRef.current = next;
+    setFinaleMode(next);
+
+    if (next) {
+      autoRef.current = false;
+      setAutoMode(false);
+    }
+  };
 
   return (
     <>
@@ -218,22 +526,24 @@ export default function FireworksCanvas() {
         className="pointer-events-none fixed inset-0 z-[1]"
       />
 
-      {/* Auto Mode Control */}
-      <div className="fixed right-6 top-6 z-50">
+      <div className="fixed right-4 top-4 z-50 flex flex-col gap-3 sm:right-6 sm:top-6">
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            setAutoMode((previous) => !previous);
-          }}
-          className={`rounded-full border px-5 py-3 text-sm
-            font-semibold backdrop-blur-md transition-all
-            ${
-              autoMode
-                ? "border-purple-400 bg-purple-600 text-white"
-                : "border-white/20 bg-white/10 text-white hover:bg-white/20"
-            }`}
+          onClick={toggleAuto}
+          className="rounded-full border border-purple-400/50 bg-purple-600
+              px-4 py-3 text-sm font-semibold text-white shadow-lg
+              transition hover:bg-purple-500 sm:px-5"
         >
           {autoMode ? "⏸ Stop Auto Show" : "▶ Auto Show"}
+        </button>
+
+        <button
+          onClick={toggleFinale}
+          className="rounded-full border border-yellow-400/40
+              bg-yellow-500/15 px-4 py-3 text-sm font-semibold
+              text-yellow-300 backdrop-blur-md transition
+              hover:bg-yellow-500/25 sm:px-5"
+        >
+          {finaleMode ? "✦ Stop Finale" : "✦ Grand Finale"}
         </button>
       </div>
     </>

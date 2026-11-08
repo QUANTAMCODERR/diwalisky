@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo } from "react";
@@ -37,15 +36,20 @@ export default function TsParticlesFireworks() {
           value: 0,
         },
 
-        color: {
-          value: [
-            "#ff3838",
-            "#ffd700",
-            "#00e5ff",
-            "#ff4dff",
-            "#7cff6b",
-            "#ffffff",
-          ],
+        paint: {
+          fill: {
+            enable: true,
+            color: {
+              value: [
+                "#ff3838",
+                "#ffd700",
+                "#00e5ff",
+                "#ff4dff",
+                "#7cff6b",
+                "#ffffff",
+              ],
+            },
+          },
         },
 
         shape: {
@@ -53,29 +57,43 @@ export default function TsParticlesFireworks() {
         },
 
         opacity: {
-          value: 1,
+          value: {
+            min: 0.3,
+            max: 1,
+          },
+          animation: {
+            enable: true,
+            speed: 1,
+            minimumValue: 0,
+            sync: false,
+          },
         },
 
         size: {
           value: {
-            min: 2,
+            min: 1,
             max: 4,
           },
         },
 
         life: {
           duration: {
-            value: 2,
+            value: 2.5,
           },
         },
 
         move: {
           enable: true,
+          direction: "none",
           speed: {
-            min: 2,
-            max: 5,
+            min: 3,
+            max: 9,
           },
-          direction: "top",
+          decay: 0.04,
+          gravity: {
+            enable: true,
+            acceleration: 5,
+          },
           outModes: {
             default: "destroy",
           },
@@ -84,17 +102,15 @@ export default function TsParticlesFireworks() {
 
       interactivity: {
         detectsOn: "window",
-
         events: {
           onClick: {
             enable: true,
             mode: "push",
           },
         },
-
         modes: {
           push: {
-            quantity: 8,
+            quantity: 90,
           },
         },
       },
@@ -104,10 +120,7 @@ export default function TsParticlesFireworks() {
 
   return (
     <ParticlesProvider init={initializeParticles}>
-      <Particles
-        id="diwalisky-fireworks"
-        options={options}
-      />
+      <Particles id="diwalisky-fireworks" options={options} />
     </ParticlesProvider>
   );
 }

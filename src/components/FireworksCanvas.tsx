@@ -49,10 +49,7 @@ interface BlastGlow {
 export default function FireworksCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [autoMode, setAutoMode] = useState(false);
   const [finaleMode, setFinaleMode] = useState(false);
-
-  const autoRef = useRef(false);
   const finaleRef = useRef(false);
 
   useEffect(() => {
@@ -63,15 +60,30 @@ export default function FireworksCanvas() {
     });
 
     if (!canvas || !ctx) return;
+    // Explosion sound effects
+    const normalBoom = new Audio("/sounds/Boom1.mp3");
+    const doubleBoom = new Audio("/sounds/Boom2.mp3");
 
+    normalBoom.preload = "auto";
+    doubleBoom.preload = "auto";
+
+    const playBlastSound = (isDouble: boolean) => {
+      const sound = (isDouble ? doubleBoom : normalBoom).cloneNode(
+        true,
+      ) as HTMLAudioElement;
+
+      sound.volume = 0.7;
+
+      sound.play().catch(() => {});
+    };
     let particles: Particle[] = [];
     let rockets: Rocket[] = [];
     let blastGlows: BlastGlow[] = [];
     let animationId = 0;
-    let autoStep = 0;
-    let nextAutoTime = 0;
+    // let autoStep = 0;
+    // let nextAutoTime = 0;
 
-    const autoPattern = [3, 2, 3, 2, 3, 1];
+    // const autoPattern = [3, 2, 3, 2, 3, 1];
     let lastFinale = 0;
     let previousTime = 0;
 
@@ -131,6 +143,7 @@ export default function FireworksCanvas() {
       style: ExplosionStyle,
       doubleBlast: boolean = false,
     ) => {
+      playBlastSound(doubleBlast);
       const count =
         style === "chrysanthemum"
           ? 140
@@ -151,8 +164,8 @@ export default function FireworksCanvas() {
         x,
         y,
         hue,
-        life: 55,
-        maxLife: 55,
+        life: 70,
+        maxLife: 70,
       });
 
       for (let i = 0; i < count; i++) {
@@ -275,14 +288,14 @@ export default function FireworksCanvas() {
 
       ctx.clearRect(0, 0, width, height);
       ctx.globalCompositeOperation = "lighter";
-      // Visible soft circular explosion glow
+      // Large smooth circular explosion glow
       blastGlows = blastGlows.filter((glow) => glow.life > 0);
 
       blastGlows.forEach((glow) => {
         const progress = glow.life / glow.maxLife;
 
-        // Expanding circular halo
-        const radius = 85 * (1.2 - progress * 0.2);
+        // Large expanding glow radius
+        const radius = 150 * (1.2 - progress * 0.2);
 
         const gradient = ctx.createRadialGradient(
           glow.x,
@@ -293,19 +306,23 @@ export default function FireworksCanvas() {
           radius,
         );
 
+        // Bright white center
+        gradient.addColorStop(0, `rgba(255,255,255,${progress * 0.4})`);
+
+        // Main colored glow
         gradient.addColorStop(
-          0,
-          `hsla(${glow.hue}, 100%, 90%, ${progress * 0.32})`,
+          0.2,
+          `hsla(${glow.hue},100%,85%,${progress * 0.32})`,
         );
 
         gradient.addColorStop(
-          0.25,
-          `hsla(${glow.hue}, 100%, 75%, ${progress * 0.24})`,
+          0.5,
+          `hsla(${glow.hue},100%,65%,${progress * 0.18})`,
         );
 
         gradient.addColorStop(
-          0.6,
-          `hsla(${glow.hue}, 100%, 60%, ${progress * 0.1})`,
+          0.8,
+          `hsla(${glow.hue},100%,55%,${progress * 0.08})`,
         );
 
         gradient.addColorStop(1, "transparent");
@@ -319,39 +336,39 @@ export default function FireworksCanvas() {
       });
 
       // Automatic fireworks sequence
-      if (autoRef.current) {
-        if (nextAutoTime === 0) {
-          nextAutoTime = time;
-        }
+      // if (autoRef.current) {
+      //   if (nextAutoTime === 0) {
+      //     nextAutoTime = time;
+      //   }
 
-        if (time >= nextAutoTime) {
-          const rocketCount = autoPattern[autoStep];
+      //   if (time >= nextAutoTime) {
+      //     const rocketCount = autoPattern[autoStep];
 
-          // Launch 3 rockets from different locations
-          if (rocketCount === 3) {
-            const positions =
-              autoStep === 0
-                ? [width * 0.15, width * 0.5, width * 0.85]
-                : [width * 0.25, width * 0.65, width * 0.95];
+      //     // Launch 3 rockets from different locations
+      //     if (rocketCount === 3) {
+      //       const positions =
+      //         autoStep === 0
+      //           ? [width * 0.15, width * 0.5, width * 0.85]
+      //           : [width * 0.25, width * 0.65, width * 0.95];
 
-            positions.forEach((x) => {
-              launchRocket(x, 80 + Math.random() * height * 0.45);
-            });
-          } else {
-            // Launch one rocket
-            launchRocket(
-              70 + Math.random() * (width - 140),
-              80 + Math.random() * height * 0.45,
-            );
-          }
+      //       positions.forEach((x) => {
+      //         launchRocket(x, 80 + Math.random() * height * 0.45);
+      //       });
+      //     } else {
+      //       // Launch one rocket
+      //       launchRocket(
+      //         70 + Math.random() * (width - 140),
+      //         80 + Math.random() * height * 0.45,
+      //       );
+      //     }
 
-          // Move to next pattern
-          autoStep = (autoStep + 1) % autoPattern.length;
+      //     // Move to next pattern
+      //     autoStep = (autoStep + 1) % autoPattern.length;
 
-          // Timing between launches
-          nextAutoTime = time + (rocketCount === 2 ? 1200 : 600);
-        }
-      }
+      //     // Timing between launches
+      //     nextAutoTime = time + (rocketCount === 2 ? 1200 : 600);
+      //   }
+      // }
 
       // Grand Finale
       if (finaleRef.current && time - lastFinale > 650) {
@@ -495,28 +512,23 @@ export default function FireworksCanvas() {
   }, []);
 
   // Keep the two modes mutually exclusive
-  const toggleAuto = () => {
-    const next = !autoMode;
+  // const toggleAuto = () => {
+  //   const next = !autoMode;
 
-    autoRef.current = next;
-    setAutoMode(next);
+  //   autoRef.current = next;
+  //   setAutoMode(next);
 
-    if (next) {
-      finaleRef.current = false;
-      setFinaleMode(false);
-    }
-  };
+  //   if (next) {
+  //     finaleRef.current = false;
+  //     setFinaleMode(false);
+  //   }
+  // };
 
   const toggleFinale = () => {
     const next = !finaleMode;
 
     finaleRef.current = next;
     setFinaleMode(next);
-
-    if (next) {
-      autoRef.current = false;
-      setAutoMode(false);
-    }
   };
 
   return (
@@ -527,15 +539,6 @@ export default function FireworksCanvas() {
       />
 
       <div className="fixed right-4 top-4 z-50 flex flex-col gap-3 sm:right-6 sm:top-6">
-        <button
-          onClick={toggleAuto}
-          className="rounded-full border border-purple-400/50 bg-purple-600
-              px-4 py-3 text-sm font-semibold text-white shadow-lg
-              transition hover:bg-purple-500 sm:px-5"
-        >
-          {autoMode ? "⏸ Stop Auto Show" : "▶ Auto Show"}
-        </button>
-
         <button
           onClick={toggleFinale}
           className="rounded-full border border-yellow-400/40

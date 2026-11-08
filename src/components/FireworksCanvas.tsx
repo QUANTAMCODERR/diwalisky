@@ -52,6 +52,8 @@ export default function FireworksCanvas() {
   const [finaleMode, setFinaleMode] = useState(false);
   const finaleRef = useRef(false);
 
+  const wakeAnimationRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d", {
@@ -80,6 +82,15 @@ export default function FireworksCanvas() {
     let rockets: Rocket[] = [];
     let blastGlows: BlastGlow[] = [];
     let animationId = 0;
+    let animate: (time: number) => void;
+
+    const scheduleAnimation = () => {
+      if (!document.hidden && animationId === 0) {
+        animationId = requestAnimationFrame(animate);
+      }
+    };
+
+    const MAX_PARTICLES = 700;
     // let autoStep = 0;
     // let nextAutoTime = 0;
 
@@ -97,10 +108,9 @@ export default function FireworksCanvas() {
     ];
 
     const resize = () => {
-      const isMobile = window.matchMedia("(max-width: 768px)").matches;
+      // const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-      const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5);
-
+      const dpr = 1;
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
 
@@ -118,6 +128,8 @@ export default function FireworksCanvas() {
         const angle = (Math.PI * 2 * i) / count;
         const speed = 1.2 + Math.random() * 1.5;
         const life = 35 + Math.random() * 20;
+
+        if (particles.length >= MAX_PARTICLES) break;
 
         particles.push({
           x,
@@ -158,9 +170,9 @@ export default function FireworksCanvas() {
                 : 110;
 
       // Remove older particles when particle limit is reached
-      if (particles.length > 900) {
-        particles = particles.slice(-500);
-      }
+      // if (particles.length > 900) {
+      //   particles = particles.slice(-500);
+      // }
 
       blastGlows.push({
         x,
@@ -226,6 +238,8 @@ export default function FireworksCanvas() {
             ? 42 + Math.random() * 15
             : hue + (Math.random() - 0.5) * 35;
 
+        if (particles.length >= MAX_PARTICLES) break;
+
         particles.push({
           x,
           y,
@@ -275,12 +289,14 @@ export default function FireworksCanvas() {
       if ((event.target as HTMLElement).closest("button")) return;
 
       launchRocket(event.clientX, event.clientY);
+      scheduleAnimation();
     };
 
     window.addEventListener("pointerdown", handlePointer);
 
     // Animation loop
-    const animate = (time: number) => {
+    animate = (time: number) => {
+      animationId = 0;
       const dt = Math.min((time - (previousTime || time)) / 16.67, 1.5);
 
       previousTime = time;
@@ -394,8 +410,8 @@ export default function FireworksCanvas() {
 
           ctx.strokeStyle = `hsla(${rocket.hue},100%,75%,${alpha})`;
           ctx.lineWidth = 4 * alpha + 0.5;
-          ctx.shadowBlur = 2;
-          ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
+          ctx.shadowBlur = 0;
+          // ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
           ctx.stroke();
         }
 
@@ -406,8 +422,8 @@ export default function FireworksCanvas() {
         ctx.beginPath();
         ctx.arc(rocket.x, rocket.y, 3, 0, Math.PI * 2);
         ctx.fillStyle = "#ffffff";
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
+        ctx.shadowBlur = 0;
+        // ctx.shadowColor = `hsl(${rocket.hue},100%,70%)`;
         ctx.fill();
 
         if (rocket.y <= rocket.targetY) {
@@ -437,7 +453,7 @@ export default function FireworksCanvas() {
 
         p.trail.unshift({ x: p.x, y: p.y });
 
-        if (p.trail.length > 3) {
+        if (p.trail.length > 2) {
           p.trail.pop();
         }
 
@@ -498,8 +514,17 @@ export default function FireworksCanvas() {
       ctx.shadowBlur = 0;
       ctx.globalCompositeOperation = "source-over";
 
-      animationId = requestAnimationFrame(animate);
+      if (
+        finaleRef.current ||
+        rockets.length > 0 ||
+        particles.length > 0 ||
+        blastGlows.length > 0
+      ) {
+        scheduleAnimation();
+      }
     };
+
+    wakeAnimationRef.current = scheduleAnimation;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -542,6 +567,10 @@ export default function FireworksCanvas() {
 
     finaleRef.current = next;
     setFinaleMode(next);
+
+    if (next) {
+      wakeAnimationRef.current?.();
+    }
   };
 
   return (

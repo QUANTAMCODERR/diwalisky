@@ -1,5 +1,6 @@
 
-import FireworksCanvas from "@/components/FireworksCanvas";
+// import FireworksCanvas from "@/components/FireworksCanvas";
+import TsParticlesFireworks from "@/components/TsParticlesFireworks";
 
 export default function Home() {
   return (
@@ -16,7 +17,8 @@ export default function Home() {
       <div className="pointer-events-none absolute inset-0 bg-black/20" />
 
       {/* Fireworks Canvas */}
-      <FireworksCanvas />
+      {/* <FireworksCanvas /> */}
+      <TsParticlesFireworks />
 
       {/* Header */}
       <header className="pointer-events-none absolute left-0 top-0 z-20 w-full px-5 py-6 sm:px-10">

@@ -9,6 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@tsparticles/engine": "^4.5.3",
+    "@tsparticles/interaction-external-push": "^4.5.3",
+    "@tsparticles/plugin-interactivity": "^4.5.3",
+    "@tsparticles/preset-fireworks": "^4.5.3",
+    "@tsparticles/react": "^4.5.3",
     "next": "16.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0"

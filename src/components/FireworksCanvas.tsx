@@ -97,7 +97,9 @@ export default function FireworksCanvas() {
     ];
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 1);
+      const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5);
 
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
@@ -288,13 +290,12 @@ export default function FireworksCanvas() {
 
       ctx.clearRect(0, 0, width, height);
       ctx.globalCompositeOperation = "lighter";
+
       // Large smooth circular explosion glow
       blastGlows = blastGlows.filter((glow) => glow.life > 0);
 
       blastGlows.forEach((glow) => {
         const progress = glow.life / glow.maxLife;
-
-        // Large expanding glow radius
         const radius = 150 * (1.2 - progress * 0.2);
 
         const gradient = ctx.createRadialGradient(
@@ -306,25 +307,19 @@ export default function FireworksCanvas() {
           radius,
         );
 
-        // Bright white center
         gradient.addColorStop(0, `rgba(255,255,255,${progress * 0.4})`);
-
-        // Main colored glow
         gradient.addColorStop(
           0.2,
           `hsla(${glow.hue},100%,85%,${progress * 0.32})`,
         );
-
         gradient.addColorStop(
           0.5,
           `hsla(${glow.hue},100%,65%,${progress * 0.18})`,
         );
-
         gradient.addColorStop(
           0.8,
           `hsla(${glow.hue},100%,55%,${progress * 0.08})`,
         );
-
         gradient.addColorStop(1, "transparent");
 
         ctx.fillStyle = gradient;
@@ -335,7 +330,7 @@ export default function FireworksCanvas() {
         glow.life -= dt;
       });
 
-      // Automatic fireworks sequence
+      // Automatic fireworks sequence (disabled)
       // if (autoRef.current) {
       //   if (nextAutoTime === 0) {
       //     nextAutoTime = time;
@@ -344,7 +339,6 @@ export default function FireworksCanvas() {
       //   if (time >= nextAutoTime) {
       //     const rocketCount = autoPattern[autoStep];
 
-      //     // Launch 3 rockets from different locations
       //     if (rocketCount === 3) {
       //       const positions =
       //         autoStep === 0
@@ -355,17 +349,13 @@ export default function FireworksCanvas() {
       //         launchRocket(x, 80 + Math.random() * height * 0.45);
       //       });
       //     } else {
-      //       // Launch one rocket
       //       launchRocket(
       //         70 + Math.random() * (width - 140),
       //         80 + Math.random() * height * 0.45,
       //       );
       //     }
 
-      //     // Move to next pattern
       //     autoStep = (autoStep + 1) % autoPattern.length;
-
-      //     // Timing between launches
       //     nextAutoTime = time + (rocketCount === 2 ? 1200 : 600);
       //   }
       // }
@@ -434,10 +424,17 @@ export default function FireworksCanvas() {
         return true;
       });
 
-      // Particle physics and trails
-      particles = particles.filter((p) => p.life > 0);
+      // Optimized particle physics and trails
+      let writeIndex = 0;
 
-      particles.forEach((p, index) => {
+      for (let index = 0; index < particles.length; index++) {
+        const p = particles[index];
+
+        if (p.life <= 0) continue;
+
+        particles[writeIndex] = p;
+        writeIndex++;
+
         p.trail.unshift({ x: p.x, y: p.y });
 
         if (p.trail.length > 3) {
@@ -454,10 +451,10 @@ export default function FireworksCanvas() {
         p.vy *= Math.pow(p.drag, dt);
 
         p.life -= dt;
+
         // Trigger secondary mini explosion
         if (p.secondaryBurst && p.life < p.maxLife * 0.55) {
           p.secondaryBurst = false;
-
           createSecondaryBurst(p.x, p.y, p.hue);
         }
 
@@ -482,19 +479,21 @@ export default function FireworksCanvas() {
           ctx.stroke();
         }
 
-        // Glowing particle head
         // Optimized glowing particle head
         ctx.beginPath();
         ctx.arc(p.x, p.y, Math.max(0.2, p.size * fade), 0, Math.PI * 2);
 
         ctx.fillStyle = `hsla(${p.hue},100%,90%,${fade})`;
 
-        // Glow only on selected particles for better performance
+        // Glow only on selected particles
         ctx.shadowBlur = index % 5 === 0 ? 3 * fade : 0;
         ctx.shadowColor = `hsl(${p.hue},100%,65%)`;
 
         ctx.fill();
-      });
+      }
+
+      // Remove expired particles without creating another array
+      particles.length = writeIndex;
 
       ctx.shadowBlur = 0;
       ctx.globalCompositeOperation = "source-over";
@@ -502,12 +501,26 @@ export default function FireworksCanvas() {
       animationId = requestAnimationFrame(animate);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(animationId);
+        animationId = 0;
+      } else if (!animationId) {
+        previousTime = 0;
+        animationId = requestAnimationFrame(animate);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     animationId = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(animationId);
+
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointerdown", handlePointer);
+
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
